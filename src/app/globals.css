@@ -1,0 +1,67 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Base ───────────────────────────────────────────────────────────── */
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #0a0a0f;
+  color: #e2e2e8;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  height: 100%;
+}
+
+/* ── Scrollbars ─────────────────────────────────────────────────────── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2a2a3a #0a0a0f;
+}
+*::-webkit-scrollbar { width: 5px; height: 5px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: #2a2a3a; border-radius: 4px; }
+*::-webkit-scrollbar-thumb:hover { background: #3a3a4e; }
+
+/* ── React Flow ─────────────────────────────────────────────────────── */
+.react-flow__panel { background: transparent !important; }
+
+.react-flow__controls {
+  background: #13131e !important;
+  border: 1px solid #1e1e2e !important;
+  border-radius: 10px !important;
+  overflow: hidden;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.4) !important;
+}
+.react-flow__controls-button {
+  background: #13131e !important;
+  border-color: #1e1e2e !important;
+  color: #6b6b80 !important;
+  fill: #6b6b80 !important;
+}
+.react-flow__controls-button:hover {
+  background: #1a1a2a !important;
+  color: #e2e2e8 !important;
+  fill: #e2e2e8 !important;
+}
+.react-flow__minimap {
+  background: #13131e !important;
+  border: 1px solid #1e1e2e !important;
+  border-radius: 10px !important;
+}
+
+/* ── Animations ─────────────────────────────────────────────────────── */
+@keyframes pulse-ring {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.pulse-ring { animation: pulse-ring 1.5s ease-in-out infinite; }
+
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to { background-position: 200% 0; }
+}
+.shimmer {
+  background: linear-gradient(90deg, #1a1a2a 25%, #22223a 50%, #1a1a2a 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}

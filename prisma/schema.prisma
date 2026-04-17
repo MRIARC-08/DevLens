@@ -1,0 +1,317 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────
+// MODEL 1: Repository
+// Represents one analyzed GitHub repo
+// ─────────────────────────────────────────
+
+model Repository {
+  id            String           @id @default(cuid())
+
+  // The original URL user pasted
+  url           String
+
+  // Extracted from URL for display
+  owner         String           // "vercel"
+  name          String           // "next.js"
+  fullName      String           // "vercel/next.js"
+
+  // Where we cloned it on server (temp path)
+  // We delete the folder after processing
+  // but keep this for reference/debugging
+  clonedPath    String?
+
+  // Processing pipeline status
+  // This drives the loading UI
+  status        RepositoryStatus @default(PENDING)
+
+  // Human readable status message
+  // "Cloning repository..."
+  // "Parsing 47 files..."
+  // "Building dependency graph..."
+  statusMessage String?
+
+  // Quick stats for the overview panel
+  totalFiles        Int @default(0)
+  parsedFiles       Int @default(0)
+  failedFiles       Int @default(0)
+  totalFunctions    Int @default(0)
+  totalComponents   Int @default(0)
+  totalEdges        Int @default(0)
+
+  // Graph-level insights
+  // Stored as JSON because structure varies
+  insights      Json?
+
+  // Error message if status = FAILED
+  errorMessage  String?
+
+  // Timestamps
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  completedAt   DateTime?
+
+  // Relations
+  files         File[]
+  chatMessages  ChatMessage[]
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+enum RepositoryStatus {
+  PENDING      // just created, queued
+  CLONING      // git clone running
+  READING      // walking file tree
+  PARSING      // extracting structure
+  GRAPHING     // building dependency edges
+  READY        // fully processed, display ready
+  FAILED       // something went wrong
+}
+
+
+// ─────────────────────────────────────────
+// MODEL 2: File
+// Represents one source file in the repo
+// ─────────────────────────────────────────
+
+model File {
+  id            String      @id @default(cuid())
+  repositoryId  String
+
+  // Path relative to repo root
+  // "src/components/Button.tsx"
+  filePath      String
+
+  // Just the filename
+  // "Button.tsx"
+  fileName      String
+
+  // Directory path
+  // "src/components"
+  directory     String
+
+  // File extension without dot
+  // "tsx" "ts" "js" "jsx"
+  extension     String
+
+  // File size in bytes
+  // Used to skip huge files
+  sizeBytes     Int
+
+  // The actual source code
+  // We keep this for:
+  // → Sending to Groq as context
+  // → Showing in the UI code viewer
+  rawContent    String
+
+  // What kind of file is this?
+  // Drives color coding in graph
+  fileType      FileType    @default(UNKNOWN)
+
+  // Did parsing succeed?
+  parseStatus   ParseStatus @default(PENDING)
+
+  // If parsing failed, why?
+  parseError    String?
+
+  // Timestamps
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  // Relations
+  repository        Repository    @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  parsedData        ParsedFile?
+  explanation       FileExplanation?
+
+  // Dependencies where THIS file is the importer
+  outgoingDeps      Dependency[]  @relation("SourceFile")
+
+  // Dependencies where THIS file is being imported
+  incomingDeps      Dependency[]  @relation("TargetFile")
+
+  @@unique([repositoryId, filePath])
+  @@index([repositoryId])
+  @@index([fileType])
+  @@index([parseStatus])
+}
+
+enum FileType {
+  COMPONENT    // React component (.jsx/.tsx with JSX return)
+  PAGE         // Next.js page or route
+  SERVICE      // Business logic, API calls
+  UTILITY      // Helper functions, pure utils
+  HOOK         // React custom hook (starts with "use")
+  CONTEXT      // React context
+  CONFIG       // Config files
+  TYPE         // TypeScript type/interface files
+  UNKNOWN      // Couldn't determine
+}
+
+enum ParseStatus {
+  PENDING      // Not parsed yet
+  SUCCESS      // Fully parsed with AST/regex
+  PARTIAL      // Parsed with fallback (regex only)
+  FAILED       // Completely failed to parse
+  SKIPPED      // Too large or binary
+}
+
+
+// ─────────────────────────────────────────
+// MODEL 3: ParsedFile
+// Structured data extracted from a File
+// One-to-one with File
+// ─────────────────────────────────────────
+
+model ParsedFile {
+  id        String   @id @default(cuid())
+  fileId    String   @unique
+
+  // All import statements found
+  imports   Json
+
+  // All exports found
+  exports   Json
+
+  // All functions and components found
+  functions Json
+
+  // How many of each thing we found
+  importCount    Int @default(0)
+  exportCount    Int @default(0)
+  functionCount  Int @default(0)
+  componentCount Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relation
+  file      File     @relation(fields: [fileId], references: [id], onDelete: Cascade)
+}
+
+
+// ─────────────────────────────────────────
+// MODEL 4: Dependency
+// One row = one import relationship
+// between two internal files
+// This IS your graph edges
+// ─────────────────────────────────────────
+
+model Dependency {
+  id            String  @id @default(cuid())
+  repositoryId  String
+
+  // The file that contains the import statement
+  sourceFileId  String
+
+  // The file being imported
+  // NULL if we couldn't resolve it
+  targetFileId  String?
+
+  // The raw import string as written in code
+  importRaw     String
+
+  // The resolved relative path
+  importResolved String?
+
+  // What was imported from this file
+  specifiers    Json
+
+  // Is this importing from node_modules?
+  isExternal    Boolean @default(false)
+
+  // External package name if isExternal
+  externalPackage String?
+
+  createdAt     DateTime @default(now())
+
+  // Relations
+  sourceFile    File     @relation("SourceFile", fields: [sourceFileId], references: [id], onDelete: Cascade)
+  targetFile    File?    @relation("TargetFile", fields: [targetFileId], references: [id], onDelete: SetNull)
+
+  @@index([repositoryId])
+  @@index([sourceFileId])
+  @@index([targetFileId])
+
+  // Prevent duplicate edges
+  @@unique([sourceFileId, importRaw])
+}
+
+
+// ─────────────────────────────────────────
+// MODEL 5: FileExplanation
+// Cached LLM explanation for a file
+// One-to-one with File
+// ─────────────────────────────────────────
+
+model FileExplanation {
+  id          String   @id @default(cuid())
+  fileId      String   @unique
+
+  // The explanation Groq returned
+  explanation String
+
+  // Which Groq model generated this
+  model       String
+
+  // The prompt we sent (useful for debugging)
+  prompt      String
+
+  // Token usage for monitoring
+  promptTokens     Int @default(0)
+  completionTokens Int @default(0)
+
+  createdAt   DateTime @default(now())
+
+  // Relation
+  file        File     @relation(fields: [fileId], references: [id], onDelete: Cascade)
+}
+
+
+// ─────────────────────────────────────────
+// MODEL 6: ChatMessage
+// Stores conversation history per repo
+// ─────────────────────────────────────────
+
+model ChatMessage {
+  id            String      @id @default(cuid())
+  repositoryId  String
+
+  // "user" or "assistant"
+  role          MessageRole
+
+  // The message content
+  content       String
+
+  // For assistant messages:
+  // which files were used as context?
+  referencedFiles Json?
+
+  // Which model responded (assistant only)
+  model         String?
+
+  // Token usage (assistant only)
+  promptTokens     Int?
+  completionTokens Int?
+
+  createdAt     DateTime    @default(now())
+
+  // Relation
+  repository    Repository  @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@index([repositoryId])
+  @@index([createdAt])
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+}
