@@ -82,25 +82,40 @@ export async function GET(
           : null,
 
         // Internal files this file imports
-        imports: file.outgoingDeps
-          .filter((d) => d.targetFile !== null)
-          .map((d) => ({
-            id: d.targetFile!.id,
-            fileName: d.targetFile!.fileName,
-            filePath: d.targetFile!.filePath,
-            fileType: d.targetFile!.fileType,
-            importRaw: d.importRaw,
-            specifiers: d.specifiers,
-          })),
+        imports: (() => {
+          type Out = {
+            targetFile: { id: string; fileName: string; filePath: string; fileType: string } | null;
+            importRaw: string;
+            specifiers: string[];
+          };
+          return (file.outgoingDeps as Out[]).flatMap((d: Out) =>
+            d.targetFile
+              ? [{
+                  id: d.targetFile.id,
+                  fileName: d.targetFile.fileName,
+                  filePath: d.targetFile.filePath,
+                  fileType: d.targetFile.fileType,
+                  importRaw: d.importRaw,
+                  specifiers: d.specifiers,
+                }]
+              : []
+          );
+        })(),
 
         // Files that import this file
-        importedBy: file.incomingDeps.map((d) => ({
-          id: d.sourceFile.id,
-          fileName: d.sourceFile.fileName,
-          filePath: d.sourceFile.filePath,
-          fileType: d.sourceFile.fileType,
-          importRaw: d.importRaw,
-        })),
+        importedBy: (() => {
+          type Inc = {
+            sourceFile: { id: string; fileName: string; filePath: string; fileType: string };
+            importRaw: string;
+          };
+          return (file.incomingDeps as Inc[]).map((d: Inc) => ({
+            id: d.sourceFile.id,
+            fileName: d.sourceFile.fileName,
+            filePath: d.sourceFile.filePath,
+            fileType: d.sourceFile.fileType,
+            importRaw: d.importRaw,
+          }));
+        })(),
 
         explanation: file.explanation?.explanation ?? null,
       },
