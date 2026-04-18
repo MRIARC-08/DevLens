@@ -180,13 +180,26 @@ function InnerGraph({ repoId, selectedFileId, onNodeClick }: InnerGraphProps) {
       .then((data: GraphApiResponse) => {
         if (!data.success) throw new Error("Failed to load graph");
 
+        const nodeLabels = new Map(data.nodes.map(n => [n.id, n.data.label]));
+        const nodePaths  = new Map(data.nodes.map(n => [n.id, n.data.filePath]));
+
         const { nodes: ln, edges: le } = getLayoutedElements(
           data.nodes.map((n) => ({
             ...n,
             type: "fileNode",
             data: { ...n.data, dimmed: false, highlighted: false },
           })),
-          data.edges
+          data.edges.map(e => ({
+            ...e,
+            data: {
+              ...(e.data as object || {}),
+              repoId,
+              sourceLabel: nodeLabels.get(e.source) || "unknown",
+              targetLabel: nodeLabels.get(e.target) || "unknown",
+              sourcePath:  nodePaths.get(e.source) || "",
+              targetPath:  nodePaths.get(e.target) || "",
+            }
+          }))
         );
 
         rawEdgesRef.current = le;

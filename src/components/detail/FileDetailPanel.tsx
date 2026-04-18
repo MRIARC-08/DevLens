@@ -38,7 +38,7 @@ interface FileDetail {
   importedBy: LinkedFile[];
   explanation: string | null;
 }
-interface FileDetailPanelProps { fileId: string; onClose: () => void; activeTab?: "insights" | "code"; }
+interface FileDetailPanelProps { fileId: string; onClose: () => void; activeTab?: "insights" | "code"; onFileSelect?: (id: string) => void; }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -135,9 +135,9 @@ function FileLink({ file, onSelect }: { file: LinkedFile; onSelect?: (id: string
       style={{
         display: "flex", alignItems: "center", gap: 8,
         padding: "5px 14px", cursor: onSelect ? "pointer" : "default",
-        transition: "background 120ms ease", borderRadius: 0,
+        transition: "all 120ms ease", borderRadius: 0,
       }}
-      onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "#4a4a4a"}
+      onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "#303030"}
       onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "none"}
     >
       <div style={{ width: 6, height: 6, borderRadius: "50%", background: color, flexShrink: 0 }} />
@@ -166,7 +166,7 @@ function FnTag({ label, color }: { label: string; color: string }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function FileDetailPanel({ fileId, onClose, activeTab = "insights" }: FileDetailPanelProps) {
+export default function FileDetailPanel({ fileId, onClose, activeTab = "insights", onFileSelect }: FileDetailPanelProps) {
   const [file, setFile]           = useState<FileDetail | null>(null);
   const [loading, setLoading]     = useState(true);
   const [explanation, setExpl]    = useState<string | null>(null);
@@ -320,7 +320,7 @@ export default function FileDetailPanel({ fileId, onClose, activeTab = "insights
             <CollapsibleSection label="Imported by" count={file.importedBy.length}>
               {file.importedBy.length === 0
                 ? <p style={{ fontSize: 12, color: "#7a7a7a", padding: "2px 14px 10px", margin: 0 }}>Nothing imports this file</p>
-                : file.importedBy.map(f => <FileLink key={f.id} file={f} />)
+                : file.importedBy.map(f => <FileLink key={f.id} file={f} onSelect={onFileSelect} />)
               }
             </CollapsibleSection>
 
@@ -330,7 +330,7 @@ export default function FileDetailPanel({ fileId, onClose, activeTab = "insights
             <CollapsibleSection label="Imports" count={file.imports.length}>
               {file.imports.length === 0
                 ? <p style={{ fontSize: 12, color: "#7a7a7a", padding: "2px 14px 10px", margin: 0 }}>No internal imports</p>
-                : file.imports.map(f => <FileLink key={f.id} file={f} />)
+                : file.imports.map(f => <FileLink key={f.id} file={f} onSelect={onFileSelect} />)
               }
             </CollapsibleSection>
 

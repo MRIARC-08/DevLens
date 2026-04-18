@@ -1026,8 +1026,22 @@ export default function RepoPage() {
           {/* Tab Content */}
           <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
             {rightTab === "chat" && <ChatPanel repoId={repoId} repoName={repoInfo?.fullName} />}
-            {rightTab === "insights" && selectedFileId && <FileDetailPanel fileId={selectedFileId} onClose={handleCloseDetail} activeTab="insights" />}
-            {rightTab === "code" && selectedFileId && <FileDetailPanel fileId={selectedFileId} onClose={handleCloseDetail} activeTab="code" />}
+            {rightTab === "insights" && selectedFileId && (
+              <FileDetailPanel
+                fileId={selectedFileId}
+                onClose={handleCloseDetail}
+                onFileSelect={handleNodeClick}
+                activeTab="insights"
+              />
+            )}
+            {rightTab === "code" && selectedFileId && (
+              <FileDetailPanel
+                fileId={selectedFileId}
+                onClose={handleCloseDetail}
+                onFileSelect={handleNodeClick}
+                activeTab="code"
+              />
+            )}
           </div>
         </div>
       </div>

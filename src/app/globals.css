@@ -117,6 +117,9 @@ button { font-family: inherit; }
 .react-flow__pane { cursor: grab; }
 .react-flow__pane:active { cursor: grabbing; }
 .react-flow__handle { transition: all 180ms ease !important; }
+.react-flow__edge-label-renderer { z-index: 50 !important; }
+.react-flow__nodes { z-index: 5 !important; }
+.react-flow__edges { z-index: 1 !important; }
 
 /* ── Animations ─────────────────────────────────────────────────────── */
 @keyframes spin {
