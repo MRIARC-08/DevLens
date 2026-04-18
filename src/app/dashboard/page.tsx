@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Plus, Link2, Code2, Loader2 } from "lucide-react";
+import { ArrowLeft, Plus, Link2, Code2, Loader2, Search } from "lucide-react";
 import RepoCard, { RepoCardProps } from "@/components/dashboard/RepoCard";
 
 const GITHUB_RE = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+/;
@@ -15,6 +15,11 @@ export default function DashboardPage() {
   const [error, setError] = useState("");
   const [techStackError, setTechStackError] = useState(false);
   const [fetchingRepos, setFetchingRepos] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredRepos = repos.filter(repo =>
+    repo.fullName.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   useEffect(() => {
     async function fetchRepos() {
@@ -133,7 +138,7 @@ export default function DashboardPage() {
 
       {/* Main Content */}
       <main style={{ maxWidth: 1000, margin: "0 auto", padding: "60px 40px 100px" }}>
-        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 40 }}>
+        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 40, flexWrap: "wrap", gap: 16 }}>
           <div>
             <h1 style={{ margin: 0, fontSize: 32, fontWeight: 800, color: "#fff", letterSpacing: "-0.02em" }}>
               Your Workspaces
@@ -142,6 +147,28 @@ export default function DashboardPage() {
               Analyze new repositories or continue where you left off.
             </p>
           </div>
+          
+          {repos.length > 0 && (
+            <div style={{ 
+              display: "flex", alignItems: "center", background: "#1e1e1e", 
+              border: "1px solid #303030", borderRadius: 8, padding: "0 12px", 
+              width: "100%", maxWidth: 320, transition: "border-color 0.2s" 
+            }}
+            onFocus={e => e.currentTarget.style.borderColor = "rgba(255,69,0,0.4)"}
+            onBlur={e => e.currentTarget.style.borderColor = "#303030"}>
+              <Search size={16} color="#7a7a7a" />
+              <input 
+                type="text" 
+                placeholder="Search workspaces by name..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{
+                  background: "none", border: "none", outline: "none", color: "#fff", 
+                  fontSize: 14, padding: "12px 8px", width: "100%"
+                }}
+              />
+            </div>
+          )}
         </div>
 
         {/* New Analysis Input */}
@@ -228,12 +255,23 @@ export default function DashboardPage() {
               Paste a URL above to start your first analysis.
             </p>
           </div>
+        ) : filteredRepos.length === 0 ? (
+          <div style={{ 
+            padding: "60px 0", textAlign: "center", border: "1px dashed #303030", 
+            borderRadius: 16, background: "rgba(30,30,30,0.3)" 
+          }}>
+            <Search size={40} color="#424242" style={{ margin: "0 auto 16px" }} />
+            <h3 style={{ margin: 0, fontSize: 18, color: "#a0a0a0", fontWeight: 500 }}>No workspaces found</h3>
+            <p style={{ margin: "8px 0 0", color: "#7a7a7a", fontSize: 14 }}>
+              No repositories match your search query "{searchQuery}".
+            </p>
+          </div>
         ) : (
           <div style={{ 
             display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(440px, 1fr))", 
             gap: 20 
           }}>
-            {repos.map(repo => (
+            {filteredRepos.map(repo => (
               <RepoCard key={repo.id} {...repo} />
             ))}
           </div>
