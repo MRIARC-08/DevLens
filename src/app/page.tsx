@@ -227,7 +227,7 @@ export default function HomePage() {
             >
               Get started for free <ArrowRight size={18} />
             </a>
-            <a href="#" style={{
+            <a href="/dashboard" style={{
               display: "inline-flex", alignItems: "center", gap: 8,
               padding: "14px 32px", borderRadius: 10,
               background: "#252525", border: "1px solid #4a4a4a",
@@ -237,7 +237,7 @@ export default function HomePage() {
               onMouseEnter={e => { e.currentTarget.style.borderColor = "#444"; e.currentTarget.style.color = "#fff"; }}
               onMouseLeave={e => { e.currentTarget.style.borderColor = "#4a4a4a"; e.currentTarget.style.color = "#ccc"; }}
             >
-              Get a quote
+              Dashboard
             </a>
           </div>
         </div>
