@@ -46,11 +46,13 @@ function StatCell({
   value,
   label,
   hot,
+  onClick,
 }: {
   icon: React.ReactNode;
   value: number;
   label: string;
   hot?: boolean;
+  onClick?: (e: React.MouseEvent) => void;
 }) {
   const numColor = hot
     ? "#ff4500"
@@ -60,11 +62,18 @@ function StatCell({
 
   return (
     <div
+      onClick={onClick}
+      onMouseEnter={e => { if (onClick) e.currentTarget.style.background = "rgba(255,255,255,0.05)" }}
+      onMouseLeave={e => { if (onClick) e.currentTarget.style.background = "transparent" }}
       style={{
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         gap: 2,
+        padding: "4px 8px",
+        borderRadius: 6,
+        cursor: onClick ? "pointer" : "default",
+        transition: "background 150ms ease",
       }}
     >
       <div
@@ -96,9 +105,16 @@ function StatCell({
 
 // ── Node ──────────────────────────────────────────────────────────────────────
 
-function FileNode({ data }: NodeProps) {
+function FileNode({ data, id }: NodeProps) {
   const nodeData = data as FileNodeData;
   const color = getFileTypeColor(nodeData.fileType);
+
+  const handleStatClick = (section: string) => (e: React.MouseEvent) => {
+    e.stopPropagation();
+    window.dispatchEvent(new CustomEvent("DEV_LENS_OPEN_LEFT_CODE", {
+      detail: { fileId: id, section }
+    }));
+  };
 
   const isHighlighted = !!nodeData.highlighted;
   const isDimmed = !!nodeData.dimmed;
@@ -245,16 +261,19 @@ function FileNode({ data }: NodeProps) {
           value={nodeData.importedByCount}
           label="imports"
           hot={nodeData.importedByCount > 5}
+          onClick={handleStatClick("imports")}
         />
         <StatCell
           icon={<ArrowUpFromLine size={9} />}
           value={nodeData.importCount}
           label="uses"
+          onClick={handleStatClick("uses")}
         />
         <StatCell
           icon={<Braces size={9} />}
           value={nodeData.functionCount}
           label="fns"
+          onClick={handleStatClick("fns")}
         />
       </div>
     </div>

@@ -116,9 +116,15 @@ export default function RepoCard(initialData: RepoCardProps) {
               {data.fullName}
             </h3>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
-              <span style={{ fontSize: 12, color: "#7a7a7a", fontFamily: "var(--font-mono, monospace)" }}>
+              <a 
+                href={data.url} target="_blank" rel="noopener noreferrer"
+                onClick={e => e.stopPropagation()}
+                onMouseEnter={e => { e.currentTarget.style.color = "#ff4500"; e.currentTarget.style.textDecoration = "underline"; }}
+                onMouseLeave={e => { e.currentTarget.style.color = "#7a7a7a"; e.currentTarget.style.textDecoration = "none"; }}
+                style={{ fontSize: 12, color: "#7a7a7a", fontFamily: "var(--font-mono, monospace)", transition: "all 0.2s" }}
+              >
                 {data.url.replace(/^https?:\/\//, "")}
-              </span>
+              </a>
             </div>
           </div>
         </div>
@@ -127,7 +133,12 @@ export default function RepoCard(initialData: RepoCardProps) {
       {/* Metrics Row */}
       {(!error) ? (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 20, flex: 1 }}>
-          <div style={{ background: "#1e1e1e", borderRadius: 8, padding: "10px", display: "flex", flexDirection: "column" }}>
+          <div 
+            onClick={(e) => { e.stopPropagation(); handleNavigate(); }}
+            onMouseEnter={e => { if(!processing) { e.currentTarget.style.background = "#2a2a2a"; e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)"; } }}
+            onMouseLeave={e => { if(!processing) { e.currentTarget.style.background = "#1e1e1e"; e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "none"; } }}
+            style={{ background: "#1e1e1e", borderRadius: 8, padding: "10px", display: "flex", flexDirection: "column", transition: "all 0.2s ease", cursor: processing ? "default" : "pointer" }}
+          >
              <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#a0a0a0", marginBottom: 6 }}>
                <Activity size={13} />
                <span style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>Health</span>
@@ -137,7 +148,12 @@ export default function RepoCard(initialData: RepoCardProps) {
              </span>
              {!processing && <span style={{ fontSize: 10, color: "#666", marginTop: 2 }}>{data.failedFiles} failed</span>}
           </div>
-          <div style={{ background: "#1e1e1e", borderRadius: 8, padding: "10px", display: "flex", flexDirection: "column" }}>
+          <div 
+            onClick={(e) => { e.stopPropagation(); handleNavigate(); }}
+            onMouseEnter={e => { if(!processing) { e.currentTarget.style.background = "#2a2a2a"; e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)"; } }}
+            onMouseLeave={e => { if(!processing) { e.currentTarget.style.background = "#1e1e1e"; e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "none"; } }}
+            style={{ background: "#1e1e1e", borderRadius: 8, padding: "10px", display: "flex", flexDirection: "column", transition: "all 0.2s ease", cursor: processing ? "default" : "pointer" }}
+          >
              <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#a0a0a0", marginBottom: 6 }}>
                <Box size={13} />
                <span style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>Files</span>
@@ -147,7 +163,12 @@ export default function RepoCard(initialData: RepoCardProps) {
              </span>
              {!processing && <span style={{ fontSize: 10, color: "#666", marginTop: 2 }}>of {data.totalFiles} parsed</span>}
           </div>
-          <div style={{ background: "#1e1e1e", borderRadius: 8, padding: "10px", display: "flex", flexDirection: "column" }}>
+          <div 
+            onClick={(e) => { e.stopPropagation(); handleNavigate(); }}
+            onMouseEnter={e => { if(!processing) { e.currentTarget.style.background = "#2a2a2a"; e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)"; } }}
+            onMouseLeave={e => { if(!processing) { e.currentTarget.style.background = "#1e1e1e"; e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "none"; } }}
+            style={{ background: "#1e1e1e", borderRadius: 8, padding: "10px", display: "flex", flexDirection: "column", transition: "all 0.2s ease", cursor: processing ? "default" : "pointer" }}
+          >
              <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#a0a0a0", marginBottom: 6 }}>
                <LayoutTemplate size={13} />
                <span style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>Components</span>

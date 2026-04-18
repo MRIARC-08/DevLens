@@ -172,6 +172,9 @@ export default function FileDetailPanel({ fileId, onClose, activeTab = "insights
   const [explanation, setExpl]    = useState<string | null>(null);
   const [loadingExpl, setLoadingExpl] = useState(false);
 
+  const [selectedText, setSelectedText] = useState("");
+  const [popupPos, setPopupPos] = useState({ x: 0, y: 0 });
+
   useEffect(() => {
     setFile(null); setLoading(true); setExpl(null);
     fetch(`/api/files/${fileId}`)
@@ -195,6 +198,23 @@ export default function FileDetailPanel({ fileId, onClose, activeTab = "insights
     } catch {}
     setLoadingExpl(false);
   }
+
+  const handleMouseUp = (e: React.MouseEvent) => {
+    if (activeTab !== "code") return;
+    const selection = window.getSelection();
+    const text = selection?.toString().trim();
+    if (text) {
+      // Calculate position relative to viewport
+      const range = selection?.getRangeAt(0);
+      const rect = range?.getBoundingClientRect();
+      if (rect) {
+        setPopupPos({ x: e.clientX, y: rect.top - 40 });
+        setSelectedText(text);
+      }
+    } else {
+      setSelectedText("");
+    }
+  };
 
   // ── Loading ─────────────────────────────────────────────────────────────
 
@@ -395,7 +415,30 @@ export default function FileDetailPanel({ fileId, onClose, activeTab = "insights
         )}
 
         {activeTab === "code" && (
-          <div style={{ flex: 1, overflow: "auto", display: "flex", flexDirection: "column" }}>
+          <div onMouseUp={handleMouseUp} style={{ flex: 1, overflow: "auto", display: "flex", flexDirection: "column" }}>
+            {selectedText && (
+              <div style={{
+                position: "fixed", top: popupPos.y, left: popupPos.x, transform: "translateX(-50%)",
+                background: "#303030", border: "1px solid #4a4a4a", borderRadius: 6,
+                padding: "4px 6px", display: "flex", gap: 4, boxShadow: "0 4px 16px rgba(0,0,0,0.6)", zIndex: 1000,
+              }}>
+                <button 
+                  onClick={() => {
+                    const msg = `Explain this snippet from \`${file.fileName}\`:\n\n\`\`\`${getLang(file.extension)}\n${selectedText}\n\`\`\`\n\n`;
+                    window.dispatchEvent(new CustomEvent("DEV_LENS_CHAT_PREFILL", { detail: { message: msg } }));
+                    setSelectedText("");
+                  }}
+                  style={{ 
+                    background: "none", color: "#ccc", border: "none", borderRadius: 4, 
+                    padding: "4px 8px", fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.background = "#4a4a4a")}
+                  onMouseLeave={e => (e.currentTarget.style.background = "none")}
+                >
+                  <Sparkles size={11} color="#ff4500" /> Explain Selection
+                </button>
+              </div>
+            )}
             <SyntaxHighlighter
               language={getLang(file.extension)}
               style={atomOneDark}

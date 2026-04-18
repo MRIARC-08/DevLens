@@ -176,10 +176,25 @@ function DragDivider({
 // ── Stat pill ─────────────────────────────────────────────────────────────────
 
 function StatPill({ value, label }: { value: number; label: string }) {
+  const [hover, setHover] = useState(false);
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-      <span style={{ fontSize: 14, fontWeight: 600, color: "#ffffff" }}>{value.toLocaleString()}</span>
-      <span style={{ fontSize: 13, color: "#909090" }}>{label}</span>
+    <div 
+      onClick={() => {
+        const msg = `Tell me about the ${label} in this codebase.`;
+        window.dispatchEvent(new CustomEvent("DEV_LENS_CHAT_TRIGGER", { detail: { message: msg } }));
+      }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{ 
+        display: "flex", alignItems: "center", gap: 5, padding: "4px 8px",
+        borderRadius: 6, cursor: "pointer", transition: "all 150ms ease",
+        background: hover ? "rgba(255,69,0,0.05)" : "transparent",
+        border: `1px solid ${hover ? "rgba(255,69,0,0.15)" : "transparent"}`,
+      }}
+    >
+      <span style={{ fontSize: 14, fontWeight: 600, color: hover ? "#ff4500" : "#ffffff", transition: "color 150ms ease" }}>{value.toLocaleString()}</span>
+      <span style={{ fontSize: 13, color: hover ? "#ccc" : "#909090", transition: "color 150ms ease" }}>{label}</span>
+      {hover && <ExternalLink size={10} color="#ff4500" style={{ marginLeft: "auto" }} />}
     </div>
   );
 }
@@ -395,11 +410,14 @@ function ChatPanel({ repoId, repoName, model, updateAiModel }: { repoId: string;
   }, [repoId, model]);
 
   useEffect(() => {
-    const handleExecute = (e: any) => {
-      send(e.detail.message);
-    };
+    const handleExecute = (e: any) => send(e.detail.message);
+    const handlePrefill = (e: any) => setInput(e.detail.message);
     window.addEventListener("DEV_LENS_CHAT_EXECUTE", handleExecute);
-    return () => window.removeEventListener("DEV_LENS_CHAT_EXECUTE", handleExecute);
+    window.addEventListener("DEV_LENS_CHAT_PREFILL", handlePrefill);
+    return () => {
+      window.removeEventListener("DEV_LENS_CHAT_EXECUTE", handleExecute);
+      window.removeEventListener("DEV_LENS_CHAT_PREFILL", handlePrefill);
+    };
   }, [send]);
 
   useEffect(() => {
@@ -497,12 +515,13 @@ function ChatPanel({ repoId, repoName, model, updateAiModel }: { repoId: string;
               }
             }}
             placeholder="Ask anything about the codebase…"
-            rows={1}
+            rows={4}
             style={{
               flex: 1, background: "none", border: "none", outline: "none",
-              color: "#ffffff", fontSize: 15, fontFamily: "inherit",
-              resize: "none", lineHeight: 1.55,
-              maxHeight: 120, overflowY: "auto",
+              color: "#ffffff", fontSize: 14, fontFamily: "inherit",
+              resize: "vertical", lineHeight: 1.55,
+              minHeight: 80, maxHeight: 240, overflowY: "auto",
+              paddingTop: 4, width: "100%",
             }}
           />
           <button
@@ -742,17 +761,19 @@ export default function RepoPage() {
   const [newRepoError, setNewRepoError] = useState("");
   const [newRepoTechStackError, setNewRepoTechStackError] = useState(false);
 
+  const [leftCodeOpen, setLeftCodeOpen] = useState(false);
+  const [leftCodeFileId, setLeftCodeFileId] = useState<string | null>(null);
+
   // Panel visibility
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [explorerOpen, setExplorerOpen] = useState(true);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Resizable panels
-  const sidebar  = useDragDivider(220, 160, 320, "h", () => setSidebarOpen(false));
-  const fileTree = useDragDivider(250, 160, 420, "h", () => setExplorerOpen(false));
-  const chatSize = useRightDragDivider(320, 250, 600, () => setRightPanelOpen(false));
+  const sidebar   = useDragDivider(260, 160, 360, "h", () => setSidebarOpen(false));
+  const codePanel = useDragDivider(400, 250, 800, "h", () => setLeftCodeOpen(false));
+  const chatSize  = useRightDragDivider(320, 250, 600, () => setRightPanelOpen(false));
 
   const [aiModel, setAiModel] = useState("llama-3.3-70b-versatile");
 
@@ -773,11 +794,25 @@ export default function RepoPage() {
       setRightTab("chat");
       // Use a small delay to ensure ChatPanel is rendered
       setTimeout(() => {
-        window.dispatchEvent(new CustomEvent("DEV_LENS_CHAT_EXECUTE", { detail: { message } }));
+        window.dispatchEvent(new CustomEvent("DEV_LENS_CHAT_PREFILL", { detail: { message } }));
       }, 50);
     };
     window.addEventListener("DEV_LENS_CHAT_TRIGGER", handleTrigger);
     return () => window.removeEventListener("DEV_LENS_CHAT_TRIGGER", handleTrigger);
+  }, []);
+
+  useEffect(() => {
+    const handleLeftCode = (e: any) => {
+      const { fileId, section } = e.detail;
+      setLeftCodeFileId(fileId);
+      setLeftCodeOpen(true);
+      const sectionName = section === "imports" ? "imports" : section === "uses" ? "usage footprint" : "exported functions";
+      window.dispatchEvent(new CustomEvent("DEV_LENS_CHAT_TRIGGER", {
+        detail: { message: `Explain the ${sectionName} of this specific file context.` }
+      }));
+    };
+    window.addEventListener("DEV_LENS_OPEN_LEFT_CODE", handleLeftCode);
+    return () => window.removeEventListener("DEV_LENS_OPEN_LEFT_CODE", handleLeftCode);
   }, []);
 
   useEffect(() => {
@@ -825,7 +860,9 @@ export default function RepoPage() {
   const handleFileSelect = useCallback((id: string) => {
     setSelected(id);
     setDetailVisible(true);
-    setRightTab("code");
+    setRightTab("insights");
+    setLeftCodeFileId(id);
+    setLeftCodeOpen(true);
   }, []);
 
   const handleCloseDetail = useCallback(() => {
@@ -1034,37 +1071,10 @@ export default function RepoPage() {
             </div>
           )}
 
-          {/* New Analysis */}
-          <div style={{ padding: "10px 12px 4px" }}>
-            <button
-              onClick={() => setShowNewAnalysis(true)}
-              style={{
-                width: "100%", display: "flex", alignItems: "center",
-                justifyContent: "center", gap: 7,
-                background: "none", border: "1px solid #4a4a4a",
-                borderRadius: 8, padding: "9px 0",
-                color: "#a0a0a0", fontSize: 14, fontWeight: 500,
-                cursor: "pointer", transition: "all 150ms ease",
-              }}
-              onMouseEnter={e => {
-                const el = e.currentTarget as HTMLElement;
-                el.style.background = "#252525";
-                el.style.color = "#ccc";
-                el.style.borderColor = "#4a4a4a";
-              }}
-              onMouseLeave={e => {
-                const el = e.currentTarget as HTMLElement;
-                el.style.background = "none";
-                el.style.color = "#666";
-                el.style.borderColor = "#4a4a4a";
-              }}
-            >
-              <Plus size={14} strokeWidth={1.75} />
-              New Analysis
-            </button>
+          {/* Explorer Tree */}
+          <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", borderTop: "1px solid #303030" }}>
+            <FileTree repoId={repoId} selectedFileId={selectedFileId} onFileSelect={handleFileSelect} />
           </div>
-
-          <div style={{ flex: 1 }} />
 
           {/* Stats */}
           {repoStats && (
@@ -1122,60 +1132,51 @@ export default function RepoPage() {
       {/* ── Main area ── */}
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
 
-        {/* File tree */}
-        {explorerOpen && (
+        {/* Source Code Panel */}
+        {leftCodeOpen && leftCodeFileId && (
           <div style={{
-            width: fileTree.size, flexShrink: 0,
+            width: codePanel.size, flexShrink: 0,
             background: "#252525", borderRight: "1px solid #303030",
             display: "flex", flexDirection: "column", overflow: "hidden",
           }}>
             <PanelBar>
-              <FolderTree size={14} color="#ff4500" strokeWidth={1.75} />
+              <Code2 size={14} color="#ff4500" strokeWidth={1.75} />
               <span style={{ fontSize: 13, fontWeight: 600, color: "#cccccc", letterSpacing: "0.04em", textTransform: "uppercase", flex: 1 }}>
-                Explorer
+                Source Code
               </span>
               <button 
-                onClick={() => setExplorerOpen(false)}
+                onClick={() => setLeftCodeOpen(false)}
                 style={{ background: "none", border: "none", color: "#555", cursor: "pointer", padding: 4 }}
-                title="Collapse explorer"
+                title="Collapse code"
               >
                 <ChevronLeft size={16} />
               </button>
             </PanelBar>
             <div style={{ flex: 1, overflow: "hidden" }}>
-              <FileTree
-                repoId={repoId}
-                selectedFileId={selectedFileId}
+              <FileDetailPanel
+                fileId={leftCodeFileId}
+                onClose={() => setLeftCodeOpen(false)}
                 onFileSelect={handleFileSelect}
+                activeTab="code"
               />
             </div>
           </div>
         )}
 
-        {explorerOpen && <DragDivider onMouseDown={fileTree.onMouseDown} />}
+        {leftCodeOpen && leftCodeFileId && <DragDivider onMouseDown={codePanel.onMouseDown} />}
 
         {/* Graph */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <PanelBar>
-            {/* If sidebar or explorer is closed, show a restore button */}
-            {(!sidebarOpen || !explorerOpen) && (
+            {/* If sidebar is closed, show a restore button */}
+            {!sidebarOpen && (
               <div style={{ display: "flex", gap: 6, marginRight: 10 }}>
-                {!sidebarOpen && (
-                  <button 
-                    onClick={() => setSidebarOpen(true)}
-                    style={{ background: "#252525", border: "1px solid #3a3a3a", borderRadius: 4, padding: "2px 6px", display: "flex", alignItems: "center", gap: 4, color: "#999", fontSize: 11, cursor: "pointer" }}
-                  >
-                    <SidebarIcon size={12} /> Sidebar
-                  </button>
-                )}
-                {!explorerOpen && (
-                  <button 
-                    onClick={() => setExplorerOpen(true)}
-                    style={{ background: "#252525", border: "1px solid #3a3a3a", borderRadius: 4, padding: "2px 6px", display: "flex", alignItems: "center", gap: 4, color: "#999", fontSize: 11, cursor: "pointer" }}
-                  >
-                    <FolderTree size={12} /> Explorer
-                  </button>
-                )}
+                <button 
+                  onClick={() => setSidebarOpen(true)}
+                  style={{ background: "#252525", border: "1px solid #3a3a3a", borderRadius: 4, padding: "2px 6px", display: "flex", alignItems: "center", gap: 4, color: "#999", fontSize: 11, cursor: "pointer" }}
+                >
+                  <SidebarIcon size={12} /> Sidebar
+                </button>
               </div>
             )}
 
@@ -1257,17 +1258,6 @@ export default function RepoPage() {
                   >
                     Insights
                   </button>
-                  <button 
-                    onClick={() => setRightTab("code")}
-                    style={{
-                      flex: 1, background: "none", border: "none", height: "100%",
-                      color: rightTab === "code" ? "#ff4500" : "#666",
-                      fontSize: 13, fontWeight: rightTab === "code" ? 600 : 500,
-                      cursor: "pointer", borderBottom: `2px solid ${rightTab === "code" ? "#ff4500" : "transparent"}`
-                    }}
-                  >
-                    Source Code
-                  </button>
                 </>
               )}
               <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 10px", marginLeft: "auto", height: "100%" }}>
@@ -1290,14 +1280,6 @@ export default function RepoPage() {
                   onClose={handleCloseDetail}
                   onFileSelect={handleNodeClick}
                   activeTab="insights"
-                />
-              )}
-              {rightTab === "code" && selectedFileId && (
-                <FileDetailPanel
-                  fileId={selectedFileId}
-                  onClose={handleCloseDetail}
-                  onFileSelect={handleNodeClick}
-                  activeTab="code"
                 />
               )}
             </div>
