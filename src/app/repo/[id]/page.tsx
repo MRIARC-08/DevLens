@@ -861,6 +861,8 @@ export default function RepoPage() {
     if (id) {
       setDetailVisible(true);
       setRightTab("insights");
+      setLeftCodeFileId(id);
+      setLeftCodeOpen(true);
     } else {
       setRightTab("chat");
       setDetailVisible(false);
