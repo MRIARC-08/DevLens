@@ -69,26 +69,51 @@ export default function HomePage() {
   const [error, setError] = useState("");
   const [recent, setRecent] = useState<RecentRepo[]>([]);
 
+  const [techStackError, setTechStackError] = useState(false);
+
   useEffect(() => { setRecent(loadRecent()); }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    setTechStackError(false);
     const trimmed = url.trim();
-    if (!GITHUB_RE.test(trimmed)) { setError("Please enter a valid GitHub repository URL"); return; }
+    const match = trimmed.match(GITHUB_RE);
+    if (!match) { setError("Please enter a valid GitHub repository URL"); return; }
+    
     setLoading(true);
+    
     try {
+      // 1. Language constraint validation against GitHub API
+      const exMatch = trimmed.match(/github\.com\/([\w.-]+)\/([\w.-]+)/);
+      if (exMatch) {
+        const langRes = await fetch(`https://api.github.com/repos/${exMatch[1]}/${exMatch[2]}/languages`);
+        if (langRes.ok) {
+          const langs = await langRes.json();
+          const keys = Object.keys(langs);
+          if (keys.length > 0 && !keys.includes("TypeScript") && !keys.includes("JavaScript")) {
+            setTechStackError(true);
+            setLoading(false);
+            return;
+          }
+        }
+      }
+
+      // 2. Proceed with backend analysis
       const res = await fetch("/api/repos/analyze", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: trimmed }),
       });
       const data = await res.json();
       if (!data.success) { setError(data.error ?? "Something went wrong"); setLoading(false); return; }
-      const match = trimmed.match(/github\.com\/([\w.-]+\/[\w.-]+)/);
-      const fullName = match ? match[1] : trimmed;
+      
+      const fullName = exMatch ? `${exMatch[1]}/${exMatch[2]}` : trimmed;
       saveRecent({ repoId: data.repoId, fullName, url: trimmed, analyzedAt: new Date().toISOString() });
       router.push(`/dashboard`);
-    } catch { setError("Failed to connect. Please try again."); setLoading(false); }
+    } catch { 
+      setError("Failed to connect. Please try again."); 
+      setLoading(false); 
+    }
   }
 
   return (
@@ -239,19 +264,19 @@ export default function HomePage() {
           <form onSubmit={handleSubmit}>
             <div style={{
               display: "flex", alignItems: "center", gap: 0,
-              background: "#252525", border: `1px solid ${error ? "rgba(239,68,68,0.4)" : "#4a4a4a"}`,
+              background: "#252525", border: `1px solid ${error || techStackError ? "rgba(239,68,68,0.4)" : "#4a4a4a"}`,
               borderRadius: 10, overflow: "hidden",
               transition: "border-color 0.2s",
             }}
-              onFocus={e => { if (!error) (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,69,0,0.4)"; }}
-              onBlur={e => { if (!error) (e.currentTarget as HTMLElement).style.borderColor = "#4a4a4a"; }}
+              onFocus={e => { if (!error && !techStackError) (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,69,0,0.4)"; }}
+              onBlur={e => { if (!error && !techStackError) (e.currentTarget as HTMLElement).style.borderColor = "#4a4a4a"; }}
             >
               <div style={{ padding: "0 16px", display: "flex", alignItems: "center" }}>
                 <Link2 size={18} color="#555" />
               </div>
               <input
                 type="text" value={url}
-                onChange={(e) => { setUrl(e.target.value); setError(""); }}
+                onChange={(e) => { setUrl(e.target.value); setError(""); setTechStackError(false); }}
                 placeholder="https://github.com/vercel/next.js"
                 disabled={loading}
                 style={{
@@ -279,8 +304,31 @@ export default function HomePage() {
                 {loading ? "Analyzing…" : "Explore"}
               </button>
             </div>
+
             {error && (
-              <p style={{ margin: "8px 0 0", fontSize: 14, color: "#ef4444", fontWeight: 500 }}>{error}</p>
+              <p style={{ margin: "8px 0 0", fontSize: 14, color: "#ef4444", fontWeight: 500, textAlign: "left" }}>{error}</p>
+            )}
+            
+            {techStackError && (
+              <div style={{ 
+                margin: "12px 0 0", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", 
+                padding: "12px 16px", borderRadius: 8, textAlign: "left" 
+              }}>
+                <p style={{ margin: "0 0 8px", fontSize: 13, color: "#ef4444", fontWeight: 600 }}>Unsupported Repository Tech Stack</p>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: "#ffaaaa", textTransform: "uppercase", letterSpacing: "0.05em" }}>INITIAL RELEASE SUPPORT:</span>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {["TypeScript", "JavaScript", "React", "Next.js", "Node"].map((lang, i) => (
+                      <span key={i} style={{
+                        fontSize: 11, color: "#fff", background: "rgba(239,68,68,0.15)", padding: "2px 8px",
+                        borderRadius: 4, border: "1px solid rgba(239,68,68,0.3)"
+                      }}>
+                        {lang}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
             )}
           </form>
 

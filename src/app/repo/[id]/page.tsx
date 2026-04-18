@@ -41,6 +41,7 @@ function useDragDivider(
   min: number,
   max: number,
   direction: "h" | "v" = "h",
+  onCollapse?: () => void
 ) {
   const [size, setSize] = useState(initial);
   const dragging = useRef(false);
@@ -54,22 +55,35 @@ function useDragDivider(
     startSize.current = size;
     document.body.classList.add(direction === "h" ? "dragging-h" : "dragging-v");
 
+    const onUp = () => {
+      dragging.current = false;
+      document.body.classList.remove("dragging-h", "dragging-v");
+      // Use any to bypass TS complaining about optional args in removeEventListener
+      window.removeEventListener("mousemove", onMove as any);
+      window.removeEventListener("mouseup", onUp);
+    };
+
     const onMove = (ev: globalThis.MouseEvent) => {
       if (!dragging.current) return;
       const delta = direction === "h"
         ? ev.clientX - start.current
         : ev.clientY - start.current;
-      setSize(Math.max(min, Math.min(max, startSize.current + delta)));
+        
+      const currentSize = startSize.current + delta;
+      
+      // Snap to collapse if dragged well below min
+      if (onCollapse && currentSize < min - 50) {
+        onCollapse();
+        onUp();
+        return;
+      }
+      
+      setSize(Math.max(min, Math.min(max, currentSize)));
     };
-    const onUp = () => {
-      dragging.current = false;
-      document.body.classList.remove("dragging-h", "dragging-v");
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
+
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
-  }, [size, min, max, direction]);
+  }, [size, min, max, direction, onCollapse]);
 
   return { size, onMouseDown };
 }
@@ -78,6 +92,7 @@ function useRightDragDivider(
   initial: number,
   min: number,
   max: number,
+  onCollapse?: () => void
 ) {
   const [size, setSize] = useState(initial);
   const dragging = useRef(false);
@@ -91,20 +106,30 @@ function useRightDragDivider(
     startSize.current = size;
     document.body.classList.add("dragging-h");
 
-    const onMove = (ev: globalThis.MouseEvent) => {
-      if (!dragging.current) return;
-      const delta = start.current - ev.clientX;
-      setSize(Math.max(min, Math.min(max, startSize.current + delta)));
-    };
     const onUp = () => {
       dragging.current = false;
       document.body.classList.remove("dragging-h");
-      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mousemove", onMove as any);
       window.removeEventListener("mouseup", onUp);
     };
+
+    const onMove = (ev: globalThis.MouseEvent) => {
+      if (!dragging.current) return;
+      const delta = start.current - ev.clientX;
+      const currentSize = startSize.current + delta;
+      
+      if (onCollapse && currentSize < min - 50) {
+        onCollapse();
+        onUp();
+        return;
+      }
+      
+      setSize(Math.max(min, Math.min(max, currentSize)));
+    };
+
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
-  }, [size, min, max]);
+  }, [size, min, max, onCollapse]);
 
   return { size, onMouseDown };
 }
@@ -715,6 +740,7 @@ export default function RepoPage() {
   const [newRepoUrl, setNewRepoUrl] = useState("");
   const [newRepoLoading, setNewRepoLoading] = useState(false);
   const [newRepoError, setNewRepoError] = useState("");
+  const [newRepoTechStackError, setNewRepoTechStackError] = useState(false);
 
   // Panel visibility
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -724,9 +750,9 @@ export default function RepoPage() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Resizable panels
-  const sidebar  = useDragDivider(220, 160, 320, "h");
-  const fileTree = useDragDivider(250, 160, 420, "h");
-  const chatSize = useRightDragDivider(320, 250, 600);
+  const sidebar  = useDragDivider(220, 160, 320, "h", () => setSidebarOpen(false));
+  const fileTree = useDragDivider(250, 160, 420, "h", () => setExplorerOpen(false));
+  const chatSize = useRightDragDivider(320, 250, 600, () => setRightPanelOpen(false));
 
   const [aiModel, setAiModel] = useState("llama-3.3-70b-versatile");
 
@@ -810,13 +836,26 @@ export default function RepoPage() {
 
   const handleAnalyzeNew = useCallback(async () => {
     setNewRepoError("");
+    setNewRepoTechStackError(false);
     const trimmed = newRepoUrl.trim();
-    if (!/^https:\/\/github\.com\/[\w.-]+\/[\w.-]+/.test(trimmed)) {
+    const match = trimmed.match(/^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+)/);
+    if (!match) {
       setNewRepoError("Please enter a valid GitHub repository URL");
       return;
     }
     setNewRepoLoading(true);
     try {
+      const langRes = await fetch(`https://api.github.com/repos/${match[1]}/${match[2]}/languages`);
+      if (langRes.ok) {
+        const langs = await langRes.json();
+        const keys = Object.keys(langs);
+        if (keys.length > 0 && !keys.includes("TypeScript") && !keys.includes("JavaScript")) {
+          setNewRepoTechStackError(true);
+          setNewRepoLoading(false);
+          return;
+        }
+      }
+
       const res = await fetch("/api/repos/analyze", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: trimmed }),
@@ -1283,22 +1322,40 @@ export default function RepoPage() {
               autoFocus
               placeholder="GitHub URL (e.g. https://github.com/user/repo)"
               value={newRepoUrl}
-              onChange={e => setNewRepoUrl(e.target.value)}
+              onChange={e => { setNewRepoUrl(e.target.value); setNewRepoError(""); setNewRepoTechStackError(false); }}
               onKeyDown={e => {
                  if (e.key === "Enter" && newRepoUrl.trim()) handleAnalyzeNew();
               }}
               disabled={newRepoLoading}
               style={{
-                background: "#252525", border: `1px solid ${newRepoError ? "#ef4444" : "#4a4a4a"}`, fontSize: 14,
+                background: "#252525", border: `1px solid ${newRepoError || newRepoTechStackError ? "#ef4444" : "#4a4a4a"}`, fontSize: 14,
                 padding: "10px 14px", borderRadius: 6, color: "#fff", outline: "none",
                 fontFamily: "var(--font-mono, monospace)"
               }}
             />
             {newRepoError && <div style={{ color: "#ef4444", fontSize: 13, marginTop: -8 }}>{newRepoError}</div>}
+            {newRepoTechStackError && (
+              <div style={{ color: "#ef4444", fontSize: 13, marginTop: -8, display: "flex", flexDirection: "column", gap: 6 }}>
+                Unsupported Repository Tech Stack.
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: "#ffaaaa", textTransform: "uppercase", letterSpacing: "0.05em" }}>INITIAL RELEASE SUPPORT:</span>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {["TypeScript", "JavaScript", "React", "Next.js", "Node"].map((lang, i) => (
+                      <span key={i} style={{
+                        fontSize: 11, color: "#fff", background: "rgba(239,68,68,0.15)", padding: "2px 8px",
+                        borderRadius: 4, border: "1px solid rgba(239,68,68,0.3)"
+                      }}>
+                        {lang}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
             
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
               <button 
-                 onClick={() => { setShowNewAnalysis(false); setNewRepoUrl(""); setNewRepoError(""); }}
+                 onClick={() => { setShowNewAnalysis(false); setNewRepoUrl(""); setNewRepoError(""); setNewRepoTechStackError(false); }}
                  disabled={newRepoLoading}
                  style={{ 
                    background: "none", border: "none", color: "#a0a0a0", cursor: "pointer", 

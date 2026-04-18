@@ -3,43 +3,62 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Plus, Link2, Code2, Loader2 } from "lucide-react";
-import RepoCard from "@/components/dashboard/RepoCard";
-
-interface RecentRepo {
-  repoId: string;
-  fullName: string;
-  url: string;
-  analyzedAt: string;
-}
+import RepoCard, { RepoCardProps } from "@/components/dashboard/RepoCard";
 
 const GITHUB_RE = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+/;
-const LS_KEY = "devlens_recent";
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [repos, setRepos] = useState<RecentRepo[]>([]);
+  const [repos, setRepos] = useState<RepoCardProps[]>([]);
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [techStackError, setTechStackError] = useState(false);
+  const [fetchingRepos, setFetchingRepos] = useState(true);
 
   useEffect(() => {
-    try {
-      const data = JSON.parse(localStorage.getItem(LS_KEY) ?? "[]");
-      setRepos(data);
-    } catch {}
+    async function fetchRepos() {
+      try {
+        const res = await fetch("/api/repos");
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success) {
+            setRepos(json.repos);
+          }
+        }
+      } catch (err) {}
+      setFetchingRepos(false);
+    }
+    fetchRepos();
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    setTechStackError(false);
     const trimmed = url.trim();
-    if (!GITHUB_RE.test(trimmed)) { 
+    const match = trimmed.match(GITHUB_RE);
+    if (!match) { 
       setError("Please enter a valid GitHub repository URL"); 
       return; 
     }
     
     setLoading(true);
     try {
+      const exMatch = trimmed.match(/github\.com\/([\w.-]+)\/([\w.-]+)/);
+      if (exMatch) {
+        const langRes = await fetch(`https://api.github.com/repos/${exMatch[1]}/${exMatch[2]}/languages`);
+        if (langRes.ok) {
+          const langs = await langRes.json();
+          const keys = Object.keys(langs);
+          if (keys.length > 0 && !keys.includes("TypeScript") && !keys.includes("JavaScript")) {
+            setTechStackError(true);
+            setLoading(false);
+            return;
+          }
+        }
+      }
+
       const res = await fetch("/api/repos/analyze", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: trimmed }),
@@ -51,15 +70,22 @@ export default function DashboardPage() {
         return; 
       }
       
-      const match = trimmed.match(/github\.com\/([\w.-]+\/[\w.-]+)/);
-      const fullName = match ? match[1] : trimmed;
-      const entry = { repoId: data.repoId, fullName, url: trimmed, analyzedAt: new Date().toISOString() };
+      const newRepo = {
+        id: data.repoId,
+        fullName: exMatch ? `${exMatch[1]}/${exMatch[2]}` : trimmed,
+        url: trimmed,
+        status: "PENDING",
+        totalFiles: 0,
+        parsedFiles: 0,
+        failedFiles: 0,
+        totalFunctions: 0,
+        totalComponents: 0,
+        totalEdges: 0,
+        createdAt: new Date().toISOString()
+      };
       
-      const existing = repos.filter((r) => r.repoId !== entry.repoId);
-      const newList = [entry, ...existing].slice(0, 10); // Store up to 10 on dashboard
-      setRepos(newList);
-      localStorage.setItem(LS_KEY, JSON.stringify(newList));
-      
+      // Merge optimistic update into repos list
+      setRepos(prev => [newRepo, ...prev.filter(r => r.id !== newRepo.id)]);
       setUrl("");
       setLoading(false);
     } catch { 
@@ -127,13 +153,16 @@ export default function DashboardPage() {
             <div style={{ display: "flex", gap: 12 }}>
               <div style={{
                 flex: 1, display: "flex", alignItems: "center", gap: 12,
-                background: "#161616", border: `1px solid ${error ? "#ef4444" : "#303030"}`,
+                background: "#161616", border: `1px solid ${error || techStackError ? "#ef4444" : "#303030"}`,
                 borderRadius: 10, padding: "0 16px", transition: "border-color 0.2s",
-              }}>
+              }}
+              onFocus={e => { if (!error && !techStackError) (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,69,0,0.4)"; }}
+              onBlur={e => { if (!error && !techStackError) (e.currentTarget as HTMLElement).style.borderColor = "#303030"; }}
+              >
                 <Link2 size={18} color="#7a7a7a" />
                 <input
                   type="text" value={url}
-                  onChange={(e) => { setUrl(e.target.value); setError(""); }}
+                  onChange={(e) => { setUrl(e.target.value); setError(""); setTechStackError(false); }}
                   placeholder="Paste GitHub URL to analyze..."
                   disabled={loading}
                   style={{
@@ -159,11 +188,36 @@ export default function DashboardPage() {
               </button>
             </div>
             {error && <p style={{ margin: "10px 0 0 12px", color: "#ef4444", fontSize: 13 }}>{error}</p>}
+            {techStackError && (
+              <div style={{ 
+                margin: "12px 0 0", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", 
+                padding: "12px 16px", borderRadius: 8, textAlign: "left" 
+              }}>
+                <p style={{ margin: "0 0 8px", fontSize: 13, color: "#ef4444", fontWeight: 600 }}>Unsupported Repository Tech Stack</p>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: "#ffaaaa", textTransform: "uppercase", letterSpacing: "0.05em" }}>INITIAL RELEASE SUPPORT:</span>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {["TypeScript", "JavaScript", "React", "Next.js", "Node"].map((lang, i) => (
+                      <span key={i} style={{
+                        fontSize: 11, color: "#fff", background: "rgba(239,68,68,0.15)", padding: "2px 8px",
+                        borderRadius: 4, border: "1px solid rgba(239,68,68,0.3)"
+                      }}>
+                        {lang}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           </form>
         </div>
 
         {/* Grid of Repos */}
-        {repos.length === 0 ? (
+        {fetchingRepos ? (
+          <div style={{ display: "flex", justifyContent: "center", padding: "60px 0" }}>
+             <Loader2 size={32} color="#555" className="animate-spin" />
+          </div>
+        ) : repos.length === 0 ? (
           <div style={{ 
             padding: "60px 0", textAlign: "center", border: "1px dashed #303030", 
             borderRadius: 16, background: "rgba(30,30,30,0.3)" 
@@ -176,11 +230,11 @@ export default function DashboardPage() {
           </div>
         ) : (
           <div style={{ 
-            display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", 
+            display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(440px, 1fr))", 
             gap: 20 
           }}>
             {repos.map(repo => (
-              <RepoCard key={repo.repoId} {...repo} />
+              <RepoCard key={repo.id} {...repo} />
             ))}
           </div>
         )}
