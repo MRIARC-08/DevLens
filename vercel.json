@@ -1,4 +1,11 @@
 {
   "buildCommand": "prisma generate && next build",
-  "framework": "nextjs"
+  "framework": "nextjs",
+  
+  "functions": {
+    "src/app/api/repos/analyze/route.ts": {
+      "maxDuration": 60
+    }
+  
+}
 }
