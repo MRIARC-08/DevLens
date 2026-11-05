@@ -1,7 +1,7 @@
 // src/lib/pipeline/parser.ts
-// Extracts imports, exports, and functions from JS/TS source files using REGEX ONLY.
-// Supports BOTH ES Modules (import/export) AND CommonJS (require/module.exports).
-// Never throws — always returns a valid ParseResult even on partial failure.
+// Refactoring to use full Babel AST parser for deeper syntax analysis
+import { parse as parseBabel } from "@babel/parser";
+import traverse from "@babel/traverse";
 
 /** An import statement found in the file */
 export interface ImportItem {
@@ -34,7 +34,29 @@ export interface ParseResult {
   imports: ImportItem[];
   exports: ExportItem[];
   functions: FunctionItem[];
-  parseMethod: "regex";
+  parseMethod: "regex" | "babel";
+}
+
+/** Full Babel AST parser alternative implementation */
+export function parseWithBabelAST(content: string): ParseResult {
+  const ast = parseBabel(content, {
+    sourceType: "module",
+    plugins: ["typescript", "jsx"],
+  });
+  const imports: ImportItem[] = [];
+  const exports: ExportItem[] = [];
+  const functions: FunctionItem[] = [];
+  traverse(ast, {
+    ImportDeclaration(path) {
+      imports.push({
+        source: path.node.source.value,
+        specifiers: path.node.specifiers.map((s) => s.local.name),
+        isExternal: !path.node.source.value.startsWith("."),
+        isDynamic: false,
+      });
+    },
+  });
+  return { imports, exports, functions, parseMethod: "babel" };
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
